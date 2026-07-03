@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-crypto-trader"
+version = "0.1.0"
+description = "AI-assisted autonomous crypto paper-trading bot with hard risk controls."
+requires-python = ">=3.10"
+dependencies = [
+  "pandas>=2.2.0",
+  "numpy>=1.26.0",
+  "pydantic>=2.0.0",
+  "pyyaml>=6.0.0",
+  "python-dotenv>=1.0.0",
+  "rich>=13.0.0",
+  "ccxt>=4.5.0"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "ruff>=0.5.0"]
+
+[project.scripts]
+ai-crypto-trader = "trader.main:cli"
+trader-report = "trader.reporting:cli"
+trader-cron-tick = "trader.cron_tick:cli"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

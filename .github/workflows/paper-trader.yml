@@ -1,0 +1,84 @@
+name: Paper Trader
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_daily:
+        description: "Generate/send the daily report on this manual run"
+        type: boolean
+        default: false
+  schedule:
+    # GitHub schedules are best-effort and can be delayed. This is acceptable for paper testing.
+    - cron: "*/15 * * * *"
+    - cron: "55 23 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper-trader
+  cancel-in-progress: false
+
+jobs:
+  paper-trader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Restore paper bot state
+        uses: actions/cache@v4
+        with:
+          path: |
+            data
+            logs
+          key: paper-state-${{ github.run_id }}
+          restore-keys: |
+            paper-state-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Validate bot code
+        run: |
+          python -m pytest -q
+          python -m ruff check src tests
+
+      - name: Run paper trading tick
+        run: |
+          set -euo pipefail
+          EXTRA=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.report_daily }}" == "true" ]]; then
+            EXTRA="--report-daily"
+          fi
+          if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "55 23 * * *" ]]; then
+            EXTRA="--report-daily"
+          fi
+          python -m trader.cron_tick \
+            --config config/settings.kraken-paper.yaml \
+            --db data/github_actions_paper_journal.db \
+            --report-dir logs \
+            $EXTRA
+
+      - name: Upload logs/database artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-trader-state-${{ github.run_id }}
+          path: |
+            data
+            logs
+          retention-days: 14

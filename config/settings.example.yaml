@@ -1,0 +1,25 @@
+mode: paper
+kill_switch: false
+exchange: local_sample
+symbols:
+  - BTC/USD
+  - ETH/USD
+  - SOL/USD
+paper_equity_usd: 10000
+risk:
+  max_risk_per_trade_pct: 0.25
+  max_daily_loss_pct: 1.5
+  max_open_positions: 1
+  max_consecutive_losses: 3
+  require_stop_loss: true
+  require_take_profit: true
+  allow_leverage: false
+strategy:
+  name: trend_breakout
+  entry_timeframe: 5m
+  confirmation_timeframe: 15m
+  trend_timeframe: 1h
+ai:
+  enabled: true
+  provider: ollama
+  model: qwen3:8b
