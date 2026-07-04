@@ -20,6 +20,13 @@ def test_portfolio_opens_approved_trade():
     assert len(p.open_positions) == 1
 
 
+def test_portfolio_state_reports_open_notional():
+    p = PaperPortfolio(starting_equity=1000)
+    assert p.state().open_notional == 0
+    p.execute(signal(), decision())  # 2 units at entry 100
+    assert p.state().open_notional == 200
+
+
 def test_portfolio_rejects_unapproved_trade():
     p = PaperPortfolio(starting_equity=1000)
     rejected = RiskDecision(approved=False, reason="blocked")

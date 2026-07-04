@@ -53,6 +53,9 @@ class PortfolioState:
     daily_realized_pnl: float = 0
     open_positions: int = 0
     consecutive_losses: int = 0
+    # Entry-price notional of all open positions. Sizing must keep total
+    # notional at or below equity: spot accounts have no leverage.
+    open_notional: float = 0
 
 
 @dataclass

@@ -4,7 +4,6 @@ import argparse
 
 from trader.config import load_config
 from trader.journal import TradingJournal
-from trader.portfolio import PaperPortfolio
 from trader.scheduler import BotRunner, run_loop
 
 
@@ -19,7 +18,9 @@ def cli() -> None:
 
     cfg = load_config(args.config)
     journal = TradingJournal(args.db)
-    portfolio = PaperPortfolio(
+    # Load persisted state so local runs continue the same paper portfolio,
+    # exactly like the scheduled cron ticks. Delete the db file to start over.
+    portfolio = journal.load_portfolio(
         starting_equity=cfg.paper_equity_usd,
         fee_pct=cfg.execution.fee_pct,
         slippage_bps=cfg.execution.slippage_bps,
@@ -29,7 +30,10 @@ def cli() -> None:
     if args.loop:
         run_loop(runner, args.interval_seconds)
     else:
-        runner.run_once()
+        try:
+            runner.run_once()
+        finally:
+            journal.save_portfolio(portfolio)
         print(f"Paper cycle complete. Equity: ${portfolio.equity:.2f}. Open positions: {len(portfolio.open_positions)}")
 
 

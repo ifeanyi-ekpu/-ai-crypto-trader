@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from trader.config import BotConfig
 from trader.cron_tick import build_event_message, run_tick
 from trader.journal import TradingJournal
@@ -70,3 +72,28 @@ def test_run_tick_reuses_and_saves_persistent_portfolio_state(tmp_path, monkeypa
     restored = TradingJournal(db_path).load_portfolio(starting_equity=1000)
     assert restored.equity == 995
     assert len(restored.open_positions) == 1
+
+
+def test_run_tick_saves_state_even_when_run_fails(tmp_path, monkeypatch):
+    # Trades are journaled as they close during a run. If a later symbol then
+    # fails, the portfolio must still be saved; reloading stale state would
+    # re-close the same positions and double-count their PnL.
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text("mode: paper\nexchange: local_sample\nsymbols: []\npaper_equity_usd: 1000\n")
+    db_path = tmp_path / "journal.db"
+
+    class FailingRunner:
+        def __init__(self, config: BotConfig, journal: TradingJournal, portfolio: PaperPortfolio):
+            self.portfolio = portfolio
+
+        def run_once(self):
+            self.portfolio.equity = 970  # a trade closed before the failure
+            raise ConnectionError("exchange unreachable on second symbol")
+
+    monkeypatch.setattr("trader.cron_tick.BotRunner", FailingRunner)
+
+    with pytest.raises(ConnectionError):
+        run_tick(str(config_path), str(db_path))
+
+    restored = TradingJournal(db_path).load_portfolio(starting_equity=1000)
+    assert restored.equity == 970

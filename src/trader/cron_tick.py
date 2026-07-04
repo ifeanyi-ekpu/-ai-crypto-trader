@@ -46,8 +46,13 @@ def run_tick(config_path: str, db_path: str, report_daily: bool = False, report_
         fee_pct=cfg.execution.fee_pct,
         slippage_bps=cfg.execution.slippage_bps,
     )
-    BotRunner(config=cfg, journal=journal, portfolio=portfolio).run_once()
-    journal.save_portfolio(portfolio)
+    # Trades are journaled as they close during the run, so the portfolio must
+    # be saved even if a later symbol fails (e.g. a network error) — otherwise
+    # the next tick reloads already-closed positions and double-counts them.
+    try:
+        BotRunner(config=cfg, journal=journal, portfolio=portfolio).run_once()
+    finally:
+        journal.save_portfolio(portfolio)
     after = journal_event_counts(journal)
     message = build_event_message(before, after)
     if report_daily:

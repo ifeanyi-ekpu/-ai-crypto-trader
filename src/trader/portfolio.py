@@ -27,6 +27,7 @@ class PaperPortfolio:
             daily_realized_pnl=self.daily_realized_pnl,
             open_positions=len(self.open_positions),
             consecutive_losses=self.consecutive_losses,
+            open_notional=sum(p.entry_price * p.quantity for p in self.open_positions),
         )
 
     def execute(self, signal: Signal, decision: RiskDecision, entry_candle_ts: datetime | None = None) -> OrderResult:

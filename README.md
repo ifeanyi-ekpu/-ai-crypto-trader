@@ -23,3 +23,9 @@ python -m trader.reporting --db data/trading_journal.db
 python -m trader.main --config config/settings.kraken-paper.yaml --db data/kraken_paper_journal.db --once
 python -m trader.reporting --db data/kraken_paper_journal.db --output-dir logs
 ```
+
+The paper portfolio persists in the SQLite database between runs (equity, open
+positions, loss streaks). Delete the `--db` file to start a fresh portfolio.
+
+Position sizing is risk-based (`max_risk_per_trade_pct` of equity per trade) and
+capped so total open notional never exceeds equity — no implicit leverage.

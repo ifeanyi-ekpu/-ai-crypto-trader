@@ -36,3 +36,27 @@ def test_risk_rejects_after_max_consecutive_losses():
     decision = RiskEngine(cfg).evaluate(valid_signal(), state)
     assert decision.approved is False
     assert "consecutive" in decision.reason.lower()
+
+
+def test_risk_caps_position_notional_at_equity_no_leverage():
+    # Tight stop: risk sizing alone would ask for 250 units = $25,000 notional
+    # on a $10,000 account. A spot account cannot buy more than it holds.
+    cfg = BotConfig()
+    tight_stop = Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=99.9, take_profit=100.3, reason="breakout")
+    decision = RiskEngine(cfg).evaluate(tight_stop, PortfolioState(equity=10000))
+    assert decision.approved is True
+    assert decision.adjusted_quantity == 100  # 10000 / 100, not 25 / 0.1
+    assert decision.adjusted_quantity * 100 <= 10000
+    assert decision.max_loss_usd == 10  # capped quantity * stop distance
+
+
+def test_risk_counts_open_positions_against_available_equity():
+    cfg = BotConfig(risk={"max_open_positions": 2})
+    state = PortfolioState(equity=10000, open_positions=1, open_notional=9800)
+    decision = RiskEngine(cfg).evaluate(valid_signal(), state)
+    assert decision.approved is True
+    assert decision.adjusted_quantity == 2  # only $200 of equity is still free
+    state_fully_invested = PortfolioState(equity=10000, open_positions=1, open_notional=10000)
+    decision = RiskEngine(cfg).evaluate(valid_signal(), state_fully_invested)
+    assert decision.approved is False
+    assert "free equity" in decision.reason.lower()

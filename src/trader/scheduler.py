@@ -62,5 +62,8 @@ class BotRunner:
 
 def run_loop(runner: BotRunner, interval_seconds: int = 300) -> None:
     while True:
-        runner.run_once()
+        try:
+            runner.run_once()
+        finally:
+            runner.journal.save_portfolio(runner.portfolio)
         time.sleep(interval_seconds)

@@ -40,6 +40,16 @@ class RiskEngine:
         if quantity <= 0:
             return RiskDecision(approved=False, reason="Calculated quantity is zero")
 
+        # Risk-based sizing with a tight stop can ask for more notional than the
+        # account holds. A spot exchange would reject that, so cap the position
+        # to the equity not already committed to open positions (no leverage).
+        available_notional = state.equity - state.open_notional
+        if available_notional <= 0:
+            return RiskDecision(approved=False, reason="No free equity for a new position")
+        if quantity * signal.entry_price > available_notional:
+            quantity = available_notional / signal.entry_price
+            max_loss_usd = quantity * risk_per_unit
+
         return RiskDecision(
             approved=True,
             reason="Approved by deterministic risk engine",
