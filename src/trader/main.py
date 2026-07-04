@@ -19,7 +19,11 @@ def cli() -> None:
 
     cfg = load_config(args.config)
     journal = TradingJournal(args.db)
-    portfolio = PaperPortfolio(starting_equity=cfg.paper_equity_usd)
+    portfolio = PaperPortfolio(
+        starting_equity=cfg.paper_equity_usd,
+        fee_pct=cfg.execution.fee_pct,
+        slippage_bps=cfg.execution.slippage_bps,
+    )
     runner = BotRunner(config=cfg, journal=journal, portfolio=portfolio)
 
     if args.loop:

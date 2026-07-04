@@ -20,8 +20,14 @@ class RiskConfig(BaseModel):
 class StrategyConfig(BaseModel):
     name: str = "trend_breakout"
     entry_timeframe: str = "5m"
-    confirmation_timeframe: str = "15m"
     trend_timeframe: str = "1h"
+
+
+class ExecutionConfig(BaseModel):
+    """Simulated execution costs so paper results stay close to reality."""
+
+    fee_pct: float = Field(default=0.4, ge=0)  # per-side taker fee, in percent
+    slippage_bps: float = Field(default=5, ge=0)  # applied against us on entry and stop exits
 
 
 class AIConfig(BaseModel):
@@ -38,6 +44,7 @@ class BotConfig(BaseModel):
     paper_equity_usd: float = Field(default=10_000, gt=0)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     strategy: StrategyConfig = Field(default_factory=StrategyConfig)
+    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
 
     @property

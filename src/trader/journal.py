@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from trader.models import OrderResult, Position, RiskDecision, Signal, TradeLog
@@ -90,6 +90,19 @@ class TradingJournal:
                 );
                 """
             )
+            self._migrate(conn)
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        """Add columns introduced after v1; the SQLite file persists across deploys."""
+        migrations = {
+            "portfolio_state": ("pnl_date", "TEXT"),
+            "open_positions": ("entry_candle_ts", "TEXT"),
+        }
+        for table, (column, column_type) in migrations.items():
+            existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
 
     def log_signal(self, signal: Signal) -> None:
         with self.connect() as conn:
@@ -125,35 +138,42 @@ class TradingJournal:
         with self.connect() as conn:
             return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
-    def summary(self) -> dict[str, float | int]:
+    def summary(self, day: str | None = None) -> dict[str, float | int]:
+        trade_filter, trade_args = ("WHERE closed_at LIKE ?", (f"{day}%",)) if day else ("", ())
+        decision_filter, decision_args = ("AND ts LIKE ?", (f"{day}%",)) if day else ("", ())
         with self.connect() as conn:
-            row = conn.execute("SELECT COUNT(*) AS trades, COALESCE(SUM(pnl), 0) AS pnl FROM trades").fetchone()
-            wins = conn.execute("SELECT COUNT(*) FROM trades WHERE pnl > 0").fetchone()[0]
-            losses = conn.execute("SELECT COUNT(*) FROM trades WHERE pnl < 0").fetchone()[0]
-            rejected = conn.execute("SELECT COUNT(*) FROM risk_decisions WHERE approved = 0").fetchone()[0]
+            row = conn.execute(f"SELECT COUNT(*) AS trades, COALESCE(SUM(pnl), 0) AS pnl FROM trades {trade_filter}", trade_args).fetchone()
+            wins = conn.execute(f"SELECT COUNT(*) FROM trades {trade_filter} {'AND' if day else 'WHERE'} pnl > 0", trade_args).fetchone()[0]
+            losses = conn.execute(f"SELECT COUNT(*) FROM trades {trade_filter} {'AND' if day else 'WHERE'} pnl < 0", trade_args).fetchone()[0]
+            rejected = conn.execute(f"SELECT COUNT(*) FROM risk_decisions WHERE approved = 0 {decision_filter}", decision_args).fetchone()[0]
         return {"trades": int(row["trades"]), "pnl": float(row["pnl"]), "wins": int(wins), "losses": int(losses), "rejected": int(rejected)}
+
+    @staticmethod
+    def _today_utc() -> str:
+        return datetime.now(timezone.utc).date().isoformat()
 
     def save_portfolio(self, portfolio: PaperPortfolio) -> None:
         self.initialize()
         with self.connect() as conn:
             conn.execute(
                 """
-                INSERT INTO portfolio_state (id, starting_equity, equity, daily_realized_pnl, consecutive_losses, updated_at)
-                VALUES (1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO portfolio_state (id, starting_equity, equity, daily_realized_pnl, consecutive_losses, pnl_date, updated_at)
+                VALUES (1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                   starting_equity = excluded.starting_equity,
                   equity = excluded.equity,
                   daily_realized_pnl = excluded.daily_realized_pnl,
                   consecutive_losses = excluded.consecutive_losses,
+                  pnl_date = excluded.pnl_date,
                   updated_at = CURRENT_TIMESTAMP
                 """,
-                (portfolio.starting_equity, portfolio.equity, portfolio.daily_realized_pnl, portfolio.consecutive_losses),
+                (portfolio.starting_equity, portfolio.equity, portfolio.daily_realized_pnl, portfolio.consecutive_losses, self._today_utc()),
             )
             conn.execute("DELETE FROM open_positions")
             conn.executemany(
                 """
-                INSERT INTO open_positions (symbol, side, quantity, entry_price, stop_loss, take_profit, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO open_positions (symbol, side, quantity, entry_price, stop_loss, take_profit, opened_at, entry_candle_ts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -164,24 +184,27 @@ class TradingJournal:
                         position.stop_loss,
                         position.take_profit,
                         position.opened_at.isoformat(),
+                        position.entry_candle_ts.isoformat() if position.entry_candle_ts else None,
                     )
                     for position in portfolio.open_positions
                 ],
             )
 
-    def load_portfolio(self, starting_equity: float) -> PaperPortfolio:
+    def load_portfolio(self, starting_equity: float, fee_pct: float = 0.0, slippage_bps: float = 0.0) -> PaperPortfolio:
         self.initialize()
-        portfolio = PaperPortfolio(starting_equity=starting_equity)
+        portfolio = PaperPortfolio(starting_equity=starting_equity, fee_pct=fee_pct, slippage_bps=slippage_bps)
         with self.connect() as conn:
             state = conn.execute("SELECT * FROM portfolio_state WHERE id = 1").fetchone()
             if state is not None:
                 portfolio.starting_equity = float(state["starting_equity"])
                 portfolio.equity = float(state["equity"])
-                portfolio.daily_realized_pnl = float(state["daily_realized_pnl"])
                 portfolio.consecutive_losses = int(state["consecutive_losses"])
+                # The daily loss limit is per UTC day; carry PnL over only within the same day.
+                if state["pnl_date"] == self._today_utc():
+                    portfolio.daily_realized_pnl = float(state["daily_realized_pnl"])
             rows = conn.execute(
                 """
-                SELECT symbol, side, quantity, entry_price, stop_loss, take_profit, opened_at
+                SELECT symbol, side, quantity, entry_price, stop_loss, take_profit, opened_at, entry_candle_ts
                 FROM open_positions
                 ORDER BY id
                 """
@@ -195,6 +218,7 @@ class TradingJournal:
                 stop_loss=float(row["stop_loss"]),
                 take_profit=float(row["take_profit"]),
                 opened_at=datetime.fromisoformat(row["opened_at"]),
+                entry_candle_ts=datetime.fromisoformat(row["entry_candle_ts"]) if row["entry_candle_ts"] else None,
             )
             for row in rows
         ]

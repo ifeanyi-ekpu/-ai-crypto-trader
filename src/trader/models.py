@@ -75,6 +75,9 @@ class Position:
     stop_loss: float
     take_profit: float
     opened_at: datetime = field(default_factory=utc_now)
+    # Timestamp of the candle the entry was decided on. Exits must only be
+    # evaluated on later candles, otherwise the simulation looks ahead.
+    entry_candle_ts: datetime | None = None
 
 
 @dataclass

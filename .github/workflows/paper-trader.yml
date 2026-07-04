@@ -53,6 +53,9 @@ jobs:
           python -m pip install -e '.[dev]'
 
       - name: Validate bot code
+        # Scheduled ticks run unchanged code, so tests/lint run in CI on push
+        # and on manual dispatch only. This keeps each 15-minute tick fast.
+        if: github.event_name != 'schedule'
         run: |
           python -m pytest -q
           python -m ruff check src tests
