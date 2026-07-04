@@ -40,6 +40,17 @@ GitHub Actions is not a true always-on server:
 - persistent state is restored/saved through Actions cache/artifacts, not a real disk
 - this is acceptable for paper testing, not live-money execution
 
+## Paper portfolio persistence
+
+The SQLite journal now stores the simulated portfolio between GitHub runs:
+
+- current paper equity
+- daily realized PnL
+- consecutive loss count
+- open paper positions with stop loss / take profit
+
+This means scheduled runs no longer forget open paper positions just because a new GitHub runner starts.
+
 ## Setup commands if GitHub CLI is authenticated
 
 From `/Users/ifeanyi/ai-crypto-trader`:

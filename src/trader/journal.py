@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
-from trader.models import OrderResult, RiskDecision, Signal, TradeLog
+from trader.models import OrderResult, Position, RiskDecision, Signal, TradeLog
+from trader.portfolio import PaperPortfolio
 
 
 class TradingJournal:
@@ -68,6 +70,24 @@ class TradingJournal:
                   path TEXT NOT NULL,
                   created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS portfolio_state (
+                  id INTEGER PRIMARY KEY CHECK (id = 1),
+                  starting_equity REAL NOT NULL,
+                  equity REAL NOT NULL,
+                  daily_realized_pnl REAL NOT NULL,
+                  consecutive_losses INTEGER NOT NULL,
+                  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS open_positions (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  symbol TEXT NOT NULL,
+                  side TEXT NOT NULL,
+                  quantity REAL NOT NULL,
+                  entry_price REAL NOT NULL,
+                  stop_loss REAL NOT NULL,
+                  take_profit REAL NOT NULL,
+                  opened_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -112,3 +132,70 @@ class TradingJournal:
             losses = conn.execute("SELECT COUNT(*) FROM trades WHERE pnl < 0").fetchone()[0]
             rejected = conn.execute("SELECT COUNT(*) FROM risk_decisions WHERE approved = 0").fetchone()[0]
         return {"trades": int(row["trades"]), "pnl": float(row["pnl"]), "wins": int(wins), "losses": int(losses), "rejected": int(rejected)}
+
+    def save_portfolio(self, portfolio: PaperPortfolio) -> None:
+        self.initialize()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO portfolio_state (id, starting_equity, equity, daily_realized_pnl, consecutive_losses, updated_at)
+                VALUES (1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                  starting_equity = excluded.starting_equity,
+                  equity = excluded.equity,
+                  daily_realized_pnl = excluded.daily_realized_pnl,
+                  consecutive_losses = excluded.consecutive_losses,
+                  updated_at = CURRENT_TIMESTAMP
+                """,
+                (portfolio.starting_equity, portfolio.equity, portfolio.daily_realized_pnl, portfolio.consecutive_losses),
+            )
+            conn.execute("DELETE FROM open_positions")
+            conn.executemany(
+                """
+                INSERT INTO open_positions (symbol, side, quantity, entry_price, stop_loss, take_profit, opened_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        position.symbol,
+                        position.side,
+                        position.quantity,
+                        position.entry_price,
+                        position.stop_loss,
+                        position.take_profit,
+                        position.opened_at.isoformat(),
+                    )
+                    for position in portfolio.open_positions
+                ],
+            )
+
+    def load_portfolio(self, starting_equity: float) -> PaperPortfolio:
+        self.initialize()
+        portfolio = PaperPortfolio(starting_equity=starting_equity)
+        with self.connect() as conn:
+            state = conn.execute("SELECT * FROM portfolio_state WHERE id = 1").fetchone()
+            if state is not None:
+                portfolio.starting_equity = float(state["starting_equity"])
+                portfolio.equity = float(state["equity"])
+                portfolio.daily_realized_pnl = float(state["daily_realized_pnl"])
+                portfolio.consecutive_losses = int(state["consecutive_losses"])
+            rows = conn.execute(
+                """
+                SELECT symbol, side, quantity, entry_price, stop_loss, take_profit, opened_at
+                FROM open_positions
+                ORDER BY id
+                """
+            ).fetchall()
+        portfolio.open_positions = [
+            Position(
+                symbol=row["symbol"],
+                side=row["side"],
+                quantity=float(row["quantity"]),
+                entry_price=float(row["entry_price"]),
+                stop_loss=float(row["stop_loss"]),
+                take_profit=float(row["take_profit"]),
+                opened_at=datetime.fromisoformat(row["opened_at"]),
+            )
+            for row in rows
+        ]
+        return portfolio

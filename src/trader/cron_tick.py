@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 from trader.config import load_config
 from trader.journal import TradingJournal
 from trader.notifications import telegram_notifier_from_env
-from trader.portfolio import PaperPortfolio
 from trader.reporting import generate_daily_report
 from trader.scheduler import BotRunner
 
@@ -42,8 +41,9 @@ def run_tick(config_path: str, db_path: str, report_daily: bool = False, report_
     cfg = load_config(config_path)
     journal = TradingJournal(db_path)
     before = journal_event_counts(journal)
-    portfolio = PaperPortfolio(starting_equity=cfg.paper_equity_usd)
+    portfolio = journal.load_portfolio(starting_equity=cfg.paper_equity_usd)
     BotRunner(config=cfg, journal=journal, portfolio=portfolio).run_once()
+    journal.save_portfolio(portfolio)
     after = journal_event_counts(journal)
     message = build_event_message(before, after)
     if report_daily:
