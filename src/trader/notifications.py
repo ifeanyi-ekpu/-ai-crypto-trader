@@ -33,7 +33,7 @@ class TelegramNotifier:
 
 
 def telegram_notifier_from_env(env: Mapping[str, str] | None = None) -> TelegramNotifier | None:
-    values = env or os.environ
+    values = os.environ if env is None else env
     token = values.get("TELEGRAM_BOT_TOKEN", "").strip()
     chat_id = values.get("TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
