@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
 import pandas as pd
 
 from trader.config import BotConfig
+
+
+def _retryable_errors() -> tuple[type[Exception], ...]:
+    try:
+        import ccxt  # Imported lazily so local tests/sample mode do not require network setup.
+    except ImportError:  # pragma: no cover
+        return (ConnectionError, TimeoutError)
+    return (ccxt.NetworkError,)
 
 
 class MarketDataProvider(Protocol):
@@ -52,13 +61,31 @@ class CcxtMarketData:
     entry_timeframe: str = "5m"
     trend_timeframe: str = "1h"
     limit: int = 120
+    max_attempts: int = 3
+    backoff_seconds: float = 1.0
+
+    def _fetch_ohlcv_with_retry(self, symbol: str, timeframe: str) -> list:
+        retryable = _retryable_errors()
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                # Request one extra row: the newest candle is still forming and gets dropped.
+                return self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=self.limit + 1)
+            except retryable:
+                if attempt == self.max_attempts:
+                    raise
+                time.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
+        raise RuntimeError("unreachable")  # pragma: no cover
 
     def _fetch(self, symbol: str, timeframe: str) -> pd.DataFrame:
-        rows = self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=self.limit)
+        rows = self._fetch_ohlcv_with_retry(symbol, timeframe)
         candles = pd.DataFrame(rows, columns=["timestamp", "open", "high", "low", "close", "volume"])
         numeric_columns = ["open", "high", "low", "close", "volume"]
         candles[numeric_columns] = candles[numeric_columns].astype(float)
         candles["timestamp"] = pd.to_datetime(candles["timestamp"], unit="ms", utc=True)
+        if len(candles) > 1:
+            # The exchange returns the current, still-forming candle last. Trading on it
+            # is look-ahead bias, so only closed candles are exposed to the strategy.
+            candles = candles.iloc[:-1].reset_index(drop=True)
         return candles
 
     def get_entry_candles(self, symbol: str) -> pd.DataFrame:

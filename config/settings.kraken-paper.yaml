@@ -17,8 +17,10 @@ risk:
 strategy:
   name: trend_breakout
   entry_timeframe: 5m
-  confirmation_timeframe: 15m
   trend_timeframe: 1h
+execution:
+  fee_pct: 0.4        # Kraken spot taker fee per side, base tier
+  slippage_bps: 5     # applied against us on entries and stop exits
 ai:
   enabled: true
   provider: ollama
