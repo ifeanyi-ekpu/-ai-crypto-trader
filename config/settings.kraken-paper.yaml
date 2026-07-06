@@ -11,6 +11,7 @@ risk:
   max_daily_loss_pct: 1.5
   max_open_positions: 1
   max_consecutive_losses: 3
+  min_net_reward_risk_ratio: 2.0
   require_stop_loss: true
   require_take_profit: true
   allow_leverage: false

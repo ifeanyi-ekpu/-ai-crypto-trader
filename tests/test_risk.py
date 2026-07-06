@@ -1,10 +1,10 @@
-from trader.config import BotConfig
+from trader.config import BotConfig, ExecutionConfig
 from trader.models import PortfolioState, Signal
 from trader.risk import RiskEngine
 
 
 def valid_signal():
-    return Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=95, take_profit=110, reason="breakout")
+    return Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=95, take_profit=115, reason="breakout")
 
 
 def test_risk_rejects_when_kill_switch_on():
@@ -42,7 +42,7 @@ def test_risk_caps_position_notional_at_equity_no_leverage():
     # Tight stop: risk sizing alone would ask for 250 units = $25,000 notional
     # on a $10,000 account. A spot account cannot buy more than it holds.
     cfg = BotConfig()
-    tight_stop = Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=99.9, take_profit=100.3, reason="breakout")
+    tight_stop = Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=99.9, take_profit=103, reason="breakout")
     decision = RiskEngine(cfg).evaluate(tight_stop, PortfolioState(equity=10000))
     assert decision.approved is True
     assert decision.adjusted_quantity == 100  # 10000 / 100, not 25 / 0.1
@@ -60,3 +60,23 @@ def test_risk_counts_open_positions_against_available_equity():
     decision = RiskEngine(cfg).evaluate(valid_signal(), state_fully_invested)
     assert decision.approved is False
     assert "free equity" in decision.reason.lower()
+
+
+def test_risk_rejects_trade_where_take_profit_does_not_clear_costs():
+    cfg = BotConfig(execution=ExecutionConfig(fee_pct=0.4, slippage_bps=5))
+    tiny_target = Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=99, take_profit=100.3, reason="breakout")
+
+    decision = RiskEngine(cfg).evaluate(tiny_target, PortfolioState(equity=10000))
+
+    assert decision.approved is False
+    assert "net reward" in decision.reason.lower()
+
+
+def test_risk_requires_net_reward_to_be_at_least_twice_net_risk():
+    cfg = BotConfig(execution=ExecutionConfig(fee_pct=0.4, slippage_bps=5))
+    weak_reward = Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=95, take_profit=110, reason="breakout")
+
+    decision = RiskEngine(cfg).evaluate(weak_reward, PortfolioState(equity=10000))
+
+    assert decision.approved is False
+    assert "reward/risk" in decision.reason.lower()

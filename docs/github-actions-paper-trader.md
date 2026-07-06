@@ -51,6 +51,20 @@ The SQLite journal now stores the simulated portfolio between GitHub runs:
 
 This means scheduled runs no longer forget open paper positions just because a new GitHub runner starts.
 
+## Trade-quality filter
+
+The risk engine rejects entries that are not worth the simulated cost of trading.
+Before approving a signal, it estimates:
+
+- entry slippage
+- round-trip exchange fees
+- stop-loss slippage
+- net reward at take profit
+- net loss at stop loss
+
+By default, the expected net reward must be at least `2.0x` the expected net
+risk. A tiny gross target that would become a net loser after costs is blocked.
+
 ## Setup commands if GitHub CLI is authenticated
 
 From `/Users/ifeanyi/ai-crypto-trader`:

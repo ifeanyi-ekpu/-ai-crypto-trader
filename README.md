@@ -29,3 +29,7 @@ positions, loss streaks). Delete the `--db` file to start a fresh portfolio.
 
 Position sizing is risk-based (`max_risk_per_trade_pct` of equity per trade) and
 capped so total open notional never exceeds equity — no implicit leverage.
+The risk engine also rejects trades whose expected net take-profit after
+simulated fees/slippage is not at least `min_net_reward_risk_ratio` times the
+expected net stop-loss loss. This keeps small gross targets from becoming net
+losers after realistic trading costs.

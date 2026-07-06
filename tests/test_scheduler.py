@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from trader.config import BotConfig
+from trader.config import BotConfig, RiskConfig
 from trader.journal import TradingJournal
 from trader.models import Position
 from trader.portfolio import PaperPortfolio
@@ -84,7 +84,7 @@ def test_run_once_does_not_exit_new_position_on_its_own_entry_candle(tmp_path, m
     monkeypatch.setattr("trader.scheduler.build_market_data", lambda cfg: BreakoutData(candles))
 
     portfolio = PaperPortfolio(starting_equity=1000)
-    config = BotConfig(exchange="local_sample", symbols=["BTC/USD"])
+    config = BotConfig(exchange="local_sample", symbols=["BTC/USD"], risk=RiskConfig(min_net_reward_risk_ratio=0.1))
     journal = TradingJournal(tmp_path / "journal.db")
     BotRunner(config=config, journal=journal, portfolio=portfolio).run_once()
 

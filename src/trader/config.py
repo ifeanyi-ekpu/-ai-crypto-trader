@@ -12,6 +12,7 @@ class RiskConfig(BaseModel):
     max_daily_loss_pct: float = Field(default=1.5, gt=0)
     max_open_positions: int = Field(default=1, ge=1)
     max_consecutive_losses: int = Field(default=3, ge=1)
+    min_net_reward_risk_ratio: float = Field(default=2.0, gt=0)
     require_stop_loss: bool = True
     require_take_profit: bool = True
     allow_leverage: bool = False
