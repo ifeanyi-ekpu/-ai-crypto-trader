@@ -8,7 +8,10 @@ This is the no-VPS option. GitHub runs the paper bot on a schedule while your Ma
 
 - every 15 minutes, best-effort
 - once daily near 23:55 UTC with a daily report
+- once weekly on Sunday near 23:45 UTC with a weekly performance report
 - manually via **Actions → Paper Trader → Run workflow**
+
+Manual runs can request either report with the `report_daily` and `report_weekly` inputs.
 
 It runs:
 
@@ -28,6 +31,7 @@ The bot only sends Telegram messages for important events:
 - filled paper order
 - closed paper trade
 - daily report
+- weekly performance report
 - script error from inside `trader.cron_tick`
 
 ## Important limitations
@@ -64,6 +68,19 @@ Before approving a signal, it estimates:
 
 By default, the expected net reward must be at least `2.0x` the expected net
 risk. A tiny gross target that would become a net loser after costs is blocked.
+Position size is also calculated from the expected net stop-loss loss after
+fees/slippage, so the configured max risk is more honest.
+
+## CI quality gate
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+```bash
+python -m pytest -q
+python -m ruff check src tests
+```
+
+Scheduled paper ticks skip tests for speed, but pushed code is still guarded by CI.
 
 ## Setup commands if GitHub CLI is authenticated
 

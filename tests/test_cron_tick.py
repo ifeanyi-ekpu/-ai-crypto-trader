@@ -97,3 +97,23 @@ def test_run_tick_saves_state_even_when_run_fails(tmp_path, monkeypatch):
 
     restored = TradingJournal(db_path).load_portfolio(starting_equity=1000)
     assert restored.equity == 970
+
+
+def test_run_tick_can_generate_weekly_report_message(tmp_path, monkeypatch):
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text("mode: paper\nexchange: local_sample\nsymbols: []\npaper_equity_usd: 1000\n")
+    db_path = tmp_path / "journal.db"
+
+    class FakeRunner:
+        def __init__(self, config: BotConfig, journal: TradingJournal, portfolio: PaperPortfolio):
+            pass
+
+        def run_once(self):
+            pass
+
+    monkeypatch.setattr("trader.cron_tick.BotRunner", FakeRunner)
+
+    message = run_tick(str(config_path), str(db_path), report_weekly=True, report_dir=str(tmp_path))
+
+    assert message is not None
+    assert "Weekly paper trading report generated" in message

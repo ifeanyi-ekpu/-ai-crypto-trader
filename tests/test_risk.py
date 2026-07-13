@@ -1,3 +1,5 @@
+import pytest
+
 from trader.config import BotConfig, ExecutionConfig
 from trader.models import PortfolioState, Signal
 from trader.risk import RiskEngine
@@ -26,7 +28,7 @@ def test_risk_approves_valid_trade_and_sizes_quantity():
     cfg = BotConfig()
     decision = RiskEngine(cfg).evaluate(valid_signal(), PortfolioState(equity=10000))
     assert decision.approved is True
-    assert decision.adjusted_quantity == 5
+    assert decision.adjusted_quantity == pytest.approx(4.2535019081)
     assert decision.max_loss_usd == 25
 
 
@@ -39,15 +41,15 @@ def test_risk_rejects_after_max_consecutive_losses():
 
 
 def test_risk_caps_position_notional_at_equity_no_leverage():
-    # Tight stop: risk sizing alone would ask for 250 units = $25,000 notional
-    # on a $10,000 account. A spot account cannot buy more than it holds.
+    # Tight stop: gross stop sizing alone would ask for 250 units, but net-risk
+    # sizing includes fees/slippage so the honest quantity is much smaller.
     cfg = BotConfig()
     tight_stop = Signal(symbol="BTC/USD", side="buy", confidence=0.8, entry_price=100, stop_loss=99.9, take_profit=103, reason="breakout")
     decision = RiskEngine(cfg).evaluate(tight_stop, PortfolioState(equity=10000))
     assert decision.approved is True
-    assert decision.adjusted_quantity == 100  # 10000 / 100, not 25 / 0.1
+    assert decision.adjusted_quantity == pytest.approx(25.0112500603)
     assert decision.adjusted_quantity * 100 <= 10000
-    assert decision.max_loss_usd == 10  # capped quantity * stop distance
+    assert decision.max_loss_usd == 25
 
 
 def test_risk_counts_open_positions_against_available_equity():
@@ -55,7 +57,7 @@ def test_risk_counts_open_positions_against_available_equity():
     state = PortfolioState(equity=10000, open_positions=1, open_notional=9800)
     decision = RiskEngine(cfg).evaluate(valid_signal(), state)
     assert decision.approved is True
-    assert decision.adjusted_quantity == 2  # only $200 of equity is still free
+    assert decision.adjusted_quantity == pytest.approx(1.9990004998)  # only $200 of equity is still free after entry slippage
     state_fully_invested = PortfolioState(equity=10000, open_positions=1, open_notional=10000)
     decision = RiskEngine(cfg).evaluate(valid_signal(), state_fully_invested)
     assert decision.approved is False
@@ -80,3 +82,13 @@ def test_risk_requires_net_reward_to_be_at_least_twice_net_risk():
 
     assert decision.approved is False
     assert "reward/risk" in decision.reason.lower()
+
+
+def test_risk_sizes_quantity_using_net_stop_risk_after_costs():
+    cfg = BotConfig(execution=ExecutionConfig(fee_pct=0.4, slippage_bps=5))
+
+    decision = RiskEngine(cfg).evaluate(valid_signal(), PortfolioState(equity=10000))
+
+    assert decision.approved is True
+    assert decision.adjusted_quantity == pytest.approx(4.2535019081)
+    assert decision.max_loss_usd == 25

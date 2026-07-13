@@ -72,24 +72,25 @@ class RiskEngine:
                 reason=f"Trade rejected: net reward/risk {reward_risk_ratio:.2f} below minimum {cfg.risk.min_net_reward_risk_ratio:.2f}",
             )
 
-        risk_per_unit = abs(signal.entry_price - signal.stop_loss)
-        if risk_per_unit <= 0:
+        gross_stop_distance = abs(signal.entry_price - signal.stop_loss)
+        if gross_stop_distance <= 0:
             return RiskDecision(approved=False, reason="Invalid stop distance")
 
         max_loss_usd = state.equity * cfg.risk.max_risk_per_trade_pct / 100
-        quantity = max_loss_usd / risk_per_unit
+        quantity = max_loss_usd / net_risk_per_unit
         if quantity <= 0:
             return RiskDecision(approved=False, reason="Calculated quantity is zero")
 
         # Risk-based sizing with a tight stop can ask for more notional than the
         # account holds. A spot exchange would reject that, so cap the position
         # to the equity not already committed to open positions (no leverage).
+        entry_fill = self._slipped_price(signal.entry_price, signal.side)
         available_notional = state.equity - state.open_notional
         if available_notional <= 0:
             return RiskDecision(approved=False, reason="No free equity for a new position")
-        if quantity * signal.entry_price > available_notional:
-            quantity = available_notional / signal.entry_price
-            max_loss_usd = quantity * risk_per_unit
+        if quantity * entry_fill > available_notional:
+            quantity = available_notional / entry_fill
+            max_loss_usd = quantity * net_risk_per_unit
 
         return RiskDecision(
             approved=True,

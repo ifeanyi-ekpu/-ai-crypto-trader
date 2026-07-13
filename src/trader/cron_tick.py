@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from trader.config import load_config
 from trader.journal import TradingJournal
 from trader.notifications import telegram_notifier_from_env
-from trader.reporting import generate_daily_report
+from trader.reporting import generate_daily_report, generate_weekly_report
 from trader.scheduler import BotRunner
 
 
@@ -37,7 +37,13 @@ def build_event_message(before: dict[str, int], after: dict[str, int]) -> str | 
     return "\n".join(lines)
 
 
-def run_tick(config_path: str, db_path: str, report_daily: bool = False, report_dir: str = "logs") -> str | None:
+def run_tick(
+    config_path: str,
+    db_path: str,
+    report_daily: bool = False,
+    report_dir: str = "logs",
+    report_weekly: bool = False,
+) -> str | None:
     cfg = load_config(config_path)
     journal = TradingJournal(db_path)
     before = journal_event_counts(journal)
@@ -54,12 +60,17 @@ def run_tick(config_path: str, db_path: str, report_daily: bool = False, report_
     finally:
         journal.save_portfolio(portfolio)
     after = journal_event_counts(journal)
-    message = build_event_message(before, after)
+    messages = []
+    event_message = build_event_message(before, after)
+    if event_message:
+        messages.append(event_message)
     if report_daily:
         report_path = generate_daily_report(journal, output_dir=report_dir)
-        report_message = f"📊 Daily paper trading report generated: {report_path}"
-        message = f"{message}\n\n{report_message}" if message else report_message
-    return message
+        messages.append(f"📊 Daily paper trading report generated: {report_path}")
+    if report_weekly:
+        report_path = generate_weekly_report(journal, output_dir=report_dir)
+        messages.append(f"📈 Weekly paper trading report generated: {report_path}")
+    return "\n\n".join(messages) if messages else None
 
 
 def cli() -> None:
@@ -68,6 +79,7 @@ def cli() -> None:
     parser.add_argument("--db", default="data/kraken_paper_journal.db")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--report-daily", action="store_true")
+    parser.add_argument("--report-weekly", action="store_true")
     parser.add_argument("--report-dir", default="logs")
     args = parser.parse_args()
 
@@ -76,7 +88,7 @@ def cli() -> None:
 
     notifier = telegram_notifier_from_env()
     try:
-        message = run_tick(args.config, args.db, args.report_daily, args.report_dir)
+        message = run_tick(args.config, args.db, args.report_daily, args.report_dir, args.report_weekly)
     except Exception as exc:  # pragma: no cover - exercised by real cron failures
         error_message = f"🚨 Paper trading bot error: {exc}\n\n{traceback.format_exc(limit=3)}"
         if notifier:

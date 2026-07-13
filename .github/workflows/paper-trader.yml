@@ -7,10 +7,15 @@ on:
         description: "Generate/send the daily report on this manual run"
         type: boolean
         default: false
+      report_weekly:
+        description: "Generate/send the weekly performance report on this manual run"
+        type: boolean
+        default: false
   schedule:
     # GitHub schedules are best-effort and can be delayed. This is acceptable for paper testing.
     - cron: "*/15 * * * *"
     - cron: "55 23 * * *"
+    - cron: "45 23 * * 0"
 
 permissions:
   contents: read
@@ -65,10 +70,16 @@ jobs:
           set -euo pipefail
           EXTRA=""
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.report_daily }}" == "true" ]]; then
-            EXTRA="--report-daily"
+            EXTRA="$EXTRA --report-daily"
+          fi
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.report_weekly }}" == "true" ]]; then
+            EXTRA="$EXTRA --report-weekly"
           fi
           if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "55 23 * * *" ]]; then
-            EXTRA="--report-daily"
+            EXTRA="$EXTRA --report-daily"
+          fi
+          if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "45 23 * * 0" ]]; then
+            EXTRA="$EXTRA --report-weekly"
           fi
           python -m trader.cron_tick \
             --config config/settings.kraken-paper.yaml \

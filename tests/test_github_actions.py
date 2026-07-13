@@ -2,6 +2,7 @@ from pathlib import Path
 
 
 WORKFLOW = Path(".github/workflows/paper-trader.yml")
+CI_WORKFLOW = Path(".github/workflows/ci.yml")
 
 
 def test_paper_trader_workflow_exists_and_uses_github_secrets():
@@ -22,3 +23,21 @@ def test_paper_trader_workflow_caches_local_bot_state():
     assert "path: |" in text
     assert "data" in text
     assert "logs" in text
+
+
+def test_ci_workflow_runs_quality_gates_on_push_and_pull_request():
+    text = CI_WORKFLOW.read_text()
+
+    assert "push:" in text
+    assert "pull_request:" in text
+    assert "python -m pytest -q" in text
+    assert "python -m ruff check src tests" in text
+    assert "python-version: \"3.11\"" in text
+
+
+def test_paper_trader_workflow_can_send_weekly_report():
+    text = WORKFLOW.read_text()
+
+    assert "report_weekly:" in text
+    assert "--report-weekly" in text
+    assert "45 23 * * 0" in text
