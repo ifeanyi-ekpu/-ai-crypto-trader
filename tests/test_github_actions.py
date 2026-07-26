@@ -3,6 +3,7 @@ from pathlib import Path
 
 WORKFLOW = Path(".github/workflows/paper-trader.yml")
 CI_WORKFLOW = Path(".github/workflows/ci.yml")
+PYPROJECT = Path("pyproject.toml")
 
 
 def test_paper_trader_workflow_exists_and_uses_github_secrets():
@@ -33,6 +34,10 @@ def test_ci_workflow_runs_quality_gates_on_push_and_pull_request():
     assert "python -m pytest -q" in text
     assert "python -m ruff check src tests" in text
     assert "python-version: \"3.11\"" in text
+
+
+def test_dev_dependencies_pin_ruff_for_reproducible_ci():
+    assert '"ruff==0.15.20"' in PYPROJECT.read_text()
 
 
 def test_paper_trader_workflow_can_send_weekly_report():
