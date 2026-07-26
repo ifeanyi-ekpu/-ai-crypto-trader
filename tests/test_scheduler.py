@@ -91,3 +91,43 @@ def test_run_once_does_not_exit_new_position_on_its_own_entry_candle(tmp_path, m
     assert len(portfolio.open_positions) == 1
     assert portfolio.closed_trades == []
     assert portfolio.open_positions[0].entry_candle_ts == stamps[-1].to_pydatetime()
+
+
+def test_run_once_builds_strategy_from_config(tmp_path, monkeypatch):
+    captured = {}
+
+    class ConfiguredStrategy:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def generate(self, symbol, entry, trend):
+            from trader.models import Signal
+
+            return Signal.hold(symbol, "test")
+
+    monkeypatch.setattr("trader.scheduler.TrendBreakoutStrategy", ConfiguredStrategy)
+    config = BotConfig(
+        exchange="local_sample",
+        symbols=["BTC/USD"],
+        strategy={
+            "fast_ema": 7,
+            "slow_ema": 31,
+            "breakout_window": 12,
+            "atr_period": 9,
+            "stop_atr_multiple": 2.25,
+            "target_atr_multiple": 4.75,
+        },
+    )
+    journal = TradingJournal(tmp_path / "journal.db")
+    portfolio = PaperPortfolio(starting_equity=1000)
+
+    BotRunner(config=config, journal=journal, portfolio=portfolio).run_once()
+
+    assert captured == {
+        "fast_ema": 7,
+        "slow_ema": 31,
+        "breakout_window": 12,
+        "atr_period": 9,
+        "stop_atr_multiple": 2.25,
+        "target_atr_multiple": 4.75,
+    }

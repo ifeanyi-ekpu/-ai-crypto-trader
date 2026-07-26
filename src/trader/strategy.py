@@ -15,6 +15,8 @@ class TrendBreakoutStrategy:
     breakout_window: int = 20
     atr_period: int = 14
     minimum_atr: float = 0.000001
+    stop_atr_multiple: float = 1.5
+    target_atr_multiple: float = 3.0
 
     def generate(self, symbol: str, entry_candles: pd.DataFrame, trend_candles: pd.DataFrame) -> Signal:
         required_entry = max(self.breakout_window + 1, self.atr_period)
@@ -38,9 +40,9 @@ class TrendBreakoutStrategy:
         if pd.isna(atr_value) or float(atr_value) <= self.minimum_atr:
             return Signal.hold(symbol, "ATR unavailable or too low")
 
-        risk_distance = 1.5 * float(atr_value)
+        risk_distance = self.stop_atr_multiple * float(atr_value)
         stop_loss = entry_price - risk_distance
-        take_profit = entry_price + (2.0 * risk_distance)
+        take_profit = entry_price + (self.target_atr_multiple * float(atr_value))
         return Signal(
             symbol=symbol,
             side="buy",

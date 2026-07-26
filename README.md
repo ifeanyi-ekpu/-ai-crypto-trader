@@ -38,3 +38,15 @@ The risk engine also rejects trades whose expected net take-profit after
 simulated fees/slippage is not at least `min_net_reward_risk_ratio` times the
 expected net stop-loss loss. This keeps small gross targets from becoming net
 losers after realistic trading costs.
+
+## Current paper-strategy calibration
+
+The Kraken paper configuration checks closed **15-minute** candles for a
+20-candle breakout while retaining the one-hour EMA trend filter. Stops remain
+1.5 ATR from entry. The take-profit is configurable and currently set to 12 ATR
+because Kraken's modeled taker fees and slippage otherwise make short-horizon
+targets fail the required 2:1 **net** reward/risk filter.
+
+These settings are for evidence collection, not a profitability claim. The bot
+still holds unless the trend, breakout, cost, and risk checks all pass, and it
+still allows only one open position at a time.

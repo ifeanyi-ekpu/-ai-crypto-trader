@@ -71,6 +71,14 @@ risk. A tiny gross target that would become a net loser after costs is blocked.
 Position size is also calculated from the expected net stop-loss loss after
 fees/slippage, so the configured max risk is more honest.
 
+The current Kraken paper configuration uses closed 15-minute entry candles, a
+20-candle breakout, the existing one-hour trend filter, a 1.5 ATR stop, and a
+12 ATR target. The wider target is deliberate: recent calibration showed that
+smaller short-horizon targets were consumed by the modeled 0.4% taker fee on
+each side plus slippage before reaching the required 2:1 net reward/risk ratio.
+This tuning does not change the 0.25% per-trade risk cap, 1.5% daily loss cap,
+one-position limit, three-loss halt, or no-leverage rule.
+
 ## CI quality gate
 
 `.github/workflows/ci.yml` runs on every push and pull request:
@@ -90,7 +98,7 @@ From `/Users/ifeanyi/ai-crypto-trader`:
 git init
 git add .
 git commit -m "feat: add paper trading bot"
-gh repo create ai-crypto-trader --private --source . --push
+gh repo create ai-crypto-trader --public --source . --push
 
 gh secret set TELEGRAM_BOT_TOKEN --body "<your_bot_token>"
 gh secret set TELEGRAM_CHAT_ID --body "<your_chat_id>"
@@ -100,7 +108,7 @@ gh workflow run paper-trader.yml
 
 ## Setup without GitHub CLI
 
-1. Create a private GitHub repo manually named `ai-crypto-trader`.
+1. Create a public GitHub repo manually named `ai-crypto-trader`.
 2. Push this folder to it.
 3. In GitHub: repo → Settings → Secrets and variables → Actions → New repository secret.
 4. Add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.

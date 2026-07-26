@@ -22,6 +22,12 @@ class StrategyConfig(BaseModel):
     name: str = "trend_breakout"
     entry_timeframe: str = "5m"
     trend_timeframe: str = "1h"
+    fast_ema: int = Field(default=20, ge=1)
+    slow_ema: int = Field(default=50, ge=2)
+    breakout_window: int = Field(default=20, ge=2)
+    atr_period: int = Field(default=14, ge=2)
+    stop_atr_multiple: float = Field(default=1.5, gt=0)
+    target_atr_multiple: float = Field(default=3.0, gt=0)
 
 
 class ExecutionConfig(BaseModel):

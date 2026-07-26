@@ -20,7 +20,14 @@ class BotRunner:
     def run_once(self) -> None:
         self.journal.initialize()
         data = build_market_data(self.config)
-        strategy = TrendBreakoutStrategy()
+        strategy = TrendBreakoutStrategy(
+            fast_ema=self.config.strategy.fast_ema,
+            slow_ema=self.config.strategy.slow_ema,
+            breakout_window=self.config.strategy.breakout_window,
+            atr_period=self.config.strategy.atr_period,
+            stop_atr_multiple=self.config.strategy.stop_atr_multiple,
+            target_atr_multiple=self.config.strategy.target_atr_multiple,
+        )
         risk_engine = RiskEngine(self.config)
 
         for symbol in self.config.symbols:
